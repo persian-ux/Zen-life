@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { getPasswordChecklist } from './passwordStrength';
 
+import { useRouter } from 'expo-router';
 import { ThemedText } from '../themed-text';
 import { ThemedView } from '../themed-view';
 
@@ -20,6 +21,7 @@ export default function SignUp() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const router = useRouter();
 
   const passwordChecklist = React.useMemo(() => getPasswordChecklist(password), [password]);
 
@@ -132,7 +134,7 @@ export default function SignUp() {
           </TouchableOpacity>
 
           <ThemedText style={styles.footer}>
-            Already have an account? <ThemedText type="link">Log in</ThemedText>
+            Already have an account? <ThemedText type="link" onPress={() => router.push('/login')}>Log in</ThemedText>
           </ThemedText>
         </View>
       </KeyboardAvoidingView>
