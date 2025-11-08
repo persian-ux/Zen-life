@@ -1,26 +1,19 @@
 import { ThemedText } from '@/components/themed-text';
 import React from 'react';
-import { FlatList, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import MedicationCard from './MedicationCard';
 
 export default function TodaySchedule({ schedules, onRemove }: { schedules: any[]; onRemove: (id: number) => void }) {
   return (
     <View style={styles.container}>
-  <ThemedText type="title" style={styles.title}>{"Today's Schedule"}</ThemedText>
-      <FlatList
-        data={schedules}
-        keyExtractor={(i) => String(i.id)}
-        renderItem={({ item }) => (
-          <View style={styles.item}>
-            <View style={{ flex: 1 }}>
-              <ThemedText style={styles.name}>{item.name}</ThemedText>
-              <ThemedText style={styles.sub}>{item.time}</ThemedText>
-            </View>
-            <TouchableOpacity style={styles.takeBtn} onPress={() => onRemove(item.id)}>
-              <ThemedText style={styles.takeBtnText}>Take</ThemedText>
-            </TouchableOpacity>
+      <ThemedText type="title" style={styles.title}>{"Today's Schedule"}</ThemedText>
+      <View style={{ width: '100%', marginTop: 8 }}>
+        {schedules.map((item) => (
+          <View key={item.id} style={{ marginBottom: 10 }}>
+            <MedicationCard name={item.name} dosage={item.dosage} time={item.time} taken={item.taken} color={item.color} />
           </View>
-        )}
-      />
+        ))}
+      </View>
     </View>
   );
 }

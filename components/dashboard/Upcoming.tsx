@@ -1,22 +1,19 @@
 import { ThemedText } from '@/components/themed-text';
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import MedicationCard from './MedicationCard';
 
 export default function Upcoming({ items }: { items: any[] }) {
   return (
     <View style={styles.container}>
       <ThemedText type="title" style={styles.title}>Coming Up</ThemedText>
-      {items.map((it) => (
-        <View key={it.id} style={styles.row}>
-          <View style={{ flex: 1 }}>
-            <ThemedText style={styles.name}>{it.name}</ThemedText>
-            <ThemedText style={styles.meta}>{it.time}</ThemedText>
+      <View style={{ width: '100%', marginTop: 8 }}>
+        {items.map((it) => (
+          <View key={it.id} style={{ marginBottom: 10 }}>
+            <MedicationCard name={it.name} dosage={it.dosage} time={it.time} taken={it.taken} color={it.color} />
           </View>
-          <TouchableOpacity style={styles.action}>
-            <ThemedText style={styles.actionText}>Take Now</ThemedText>
-          </TouchableOpacity>
-        </View>
-      ))}
+        ))}
+      </View>
     </View>
   );
 }

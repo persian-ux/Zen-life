@@ -1,8 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
-import AddScheduleForm from '@/components/dashboard/AddScheduleForm';
 import Features from '@/components/dashboard/Features';
 import Hero from '@/components/dashboard/Hero';
 import Stats from '@/components/dashboard/Stats';
@@ -14,26 +13,9 @@ import { ThemedView } from '@/components/themed-view';
 export default function DashboardComponent() {
   const router = useRouter();
   // Local schedule state — in a real app persist in secure storage or backend
-  const [medName, setMedName] = useState('');
-  const [medTime, setMedTime] = useState('09:00');
-  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [schedules, setSchedules] = useState<{ id: number; name: string; time: string; days: string[] }[]>([]);
 
-  function toggleDay(day: string) {
-    setSelectedDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
-  }
-
-  function addSchedule() {
-    if (!medName.trim()) return;
-    if (!medTime.trim()) return;
-    const id = Date.now();
-    setSchedules((s) => [{ id, name: medName.trim(), time: medTime.trim(), days: selectedDays.length ? selectedDays : DAYS }, ...s]);
-    // reset form
-    setMedName('');
-    setMedTime('09:00');
-    setSelectedDays([]);
-  }
+  // form handlers removed (AddScheduleForm was removed). Keep state for potential future use.
 
   function removeSchedule(id: number) {
     setSchedules((s) => s.filter((it) => it.id !== id));
@@ -53,20 +35,41 @@ export default function DashboardComponent() {
   const todays = schedules.filter((s) => s.days.includes(todayAbbrev));
   const upcoming = schedules.slice(0, 3);
 
+  // sample fallback data to showcase design when there are no user schedules yet
+  const sampleToday = [
+    { id: 's1', name: 'Aspirin', dosage: '100mg', time: '8:00 AM', taken: true, color: '#3b82f6' },
+    { id: 's2', name: 'Vitamin D', dosage: '2000 IU', time: '9:00 AM', taken: true, color: '#f59e0b' },
+    { id: 's3', name: 'Metformin', dosage: '500mg', time: '12:00 PM', taken: false, color: '#8b5cf6' },
+    { id: 's4', name: 'Lisinopril', dosage: '10mg', time: '6:00 PM', taken: false, color: '#10b981' },
+  ];
+
+  const sampleUpcoming = [
+    { id: 'u1', name: 'Omega-3', dosage: '1000mg', time: '8:00 PM', taken: false, color: '#fb923c' },
+    { id: 'u2', name: 'Melatonin', dosage: '5mg', time: '10:00 PM', taken: false, color: '#6366f1' },
+  ];
+
+  const todaysToShow = schedules.length ? todays : sampleToday;
+  const upcomingToShow = schedules.length ? upcoming : sampleUpcoming;
+
   return (
     <ThemedView style={styles.screen}>
       <ScrollView contentContainerStyle={{ alignItems: 'center', padding: 24 }}>
         <Hero onAdd={() => { /* could scroll to form */ }} />
 
+        {/* Banner image inserted between Hero and Stats (Pills photo) */}
+        <View style={{ width: '100%', alignItems: 'center', marginTop: 18, marginBottom: 8 }}>
+          <View style={styles.imageWrap}>
+            <Image source={require('../../assets/images/Pills.jpg')} style={styles.bannerImage} resizeMode="cover" />
+          </View>
+        </View>
+
         <View style={{ maxWidth: 980, width: '100%', alignItems: 'center' }}>
           <Stats />
 
           <View style={styles.card}>
-            <AddScheduleForm medName={medName} medTime={medTime} onChangeName={setMedName} onChangeTime={setMedTime} onAdd={addSchedule} days={selectedDays} toggleDay={toggleDay} />
+            <TodaySchedule schedules={todaysToShow} onRemove={removeSchedule} />
 
-            <TodaySchedule schedules={todays} onRemove={removeSchedule} />
-
-            <Upcoming items={upcoming} />
+            <Upcoming items={upcomingToShow} />
 
             <Features />
 
@@ -136,4 +139,6 @@ const styles = StyleSheet.create({
   removeText: { color: '#d33', fontWeight: '700' },
   signout: { marginTop: 12, paddingVertical: 10 },
   signoutText: { color: '#0a7ea4', fontWeight: '700' },
+  imageWrap: { width: '100%', maxWidth: 720, borderRadius: 16, overflow: 'hidden', backgroundColor: '#fff', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 12 },
+  bannerImage: { width: '100%', height: 160 },
 });
