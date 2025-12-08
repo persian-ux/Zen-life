@@ -13,18 +13,43 @@ import { ThemedView } from '@/components/themed-view';
 export default function DashboardComponent() {
   const router = useRouter();
   // Local schedule state — in a real app persist in secure storage or backend
-  const [schedules, setSchedules] = useState<{ id: number; name: string; time: string; days: string[] }[]>([]);
+  const [schedules, setSchedules] = useState<any[]>([]);
 
   // form handlers removed (AddScheduleForm was removed). Keep state for potential future use.
 
-  function removeSchedule(id: number) {
-    setSchedules((s) => s.filter((it) => it.id !== id));
+  async function removeSchedule(id: number) {
+    const next = schedules.filter((it) => it.id !== id);
+    setSchedules(next);
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.setItem('schedules', JSON.stringify(next));
+    } catch (e) {
+      // ignore
+    }
   }
 
   function handleSignOut() {
     // Clear auth state here and navigate back to login
     router.replace('/login');
   }
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async function load() {
+      try {
+        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+        const raw = await AsyncStorage.getItem('schedules');
+        if (raw && mounted) {
+          setSchedules(JSON.parse(raw));
+        }
+      } catch (e) {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // compute todays schedules (simple): items that include current day
   const now = new Date();
@@ -54,7 +79,7 @@ export default function DashboardComponent() {
   return (
     <ThemedView style={styles.screen}>
       <ScrollView contentContainerStyle={{ alignItems: 'center', padding: 24 }}>
-        <Hero onAdd={() => { /* could scroll to form */ }} />
+        <Hero onAdd={() => router.push('/add-medication')} />
 
         {/* Banner image inserted between Hero and Stats (Pills photo) */}
         <View style={{ width: '100%', alignItems: 'center', marginTop: 18, marginBottom: 8 }}>
