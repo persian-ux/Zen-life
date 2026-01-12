@@ -10,7 +10,14 @@ export default function TodaySchedule({ schedules, onRemove }: { schedules: any[
       <View style={{ width: '100%', marginTop: 8 }}>
         {schedules.map((item) => (
           <View key={item.id} style={{ marginBottom: 10 }}>
-            <MedicationCard name={item.name} dosage={item.dosage} time={item.time} taken={item.taken} color={item.color} />
+            <MedicationCard
+              name={item.name}
+              dosage={item.dosage}
+              potency={item.potency}
+              time={item.time}
+              taken={item.taken}
+              color={item.color}
+            />
           </View>
         ))}
       </View>

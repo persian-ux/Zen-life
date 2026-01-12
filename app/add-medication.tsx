@@ -1,36 +1,51 @@
 import AddMedication from '@/components/dashboard/AddMedication';
 import { ThemedView } from '@/components/themed-view';
 import { useRouter } from 'expo-router';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
+import { auth, db } from '../firebaseConfig';
 
 export default function AddMedicationScreen() {
   const router = useRouter();
 
-  async function handleSave(data: Record<string, { name: string; dosage: string; time: string }>) {
-    try {
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      const raw = await AsyncStorage.getItem('schedules');
-      const existing = raw ? JSON.parse(raw) : [];
+  async function handleSave(
+    data: { name: string; dosage: string; potency: string; time: string; days: string[] }[],
+  ) {
+    const user = auth.currentUser;
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
 
+    try {
       const colorPalette = ['#3b82f6', '#f59e0b', '#8b5cf6', '#10b981', '#fb923c', '#6366f1', '#ef4444'];
-      let idx = existing.length;
-      const items: any[] = [];
-      Object.keys(data).forEach((day) => {
-        const entry = data[day];
-        if (entry && entry.name && entry.name.trim().length) {
-          items.push({ id: Date.now() + idx, name: entry.name, dosage: entry.dosage, time: entry.time || '', days: [day], taken: false, color: colorPalette[idx % colorPalette.length] });
+      let idx = 0;
+      const baseRef = collection(db, 'users', user.uid, 'schedules');
+
+      const writes: Promise<any>[] = [];
+      data.forEach((entry) => {
+        if (entry && entry.name && entry.name.trim().length && entry.days && entry.days.length) {
+          const payload = {
+            name: entry.name.trim(),
+            dosage: entry.dosage.trim(),
+            potency: entry.potency.trim(),
+            time: entry.time || '',
+            days: entry.days,
+            taken: false,
+            color: colorPalette[idx % colorPalette.length],
+            createdAt: serverTimestamp(),
+          };
+          writes.push(addDoc(baseRef, payload));
           idx += 1;
         }
       });
 
-      const next = [...existing, ...items];
-      await AsyncStorage.setItem('schedules', JSON.stringify(next));
+      await Promise.all(writes);
     } catch (e) {
-      // ignore
+      console.log('Error saving schedules to Firestore', e);
     }
 
-    // go back to dashboard
     router.replace('/dashboard');
   }
 

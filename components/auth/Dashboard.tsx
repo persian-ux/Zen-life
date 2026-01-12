@@ -10,7 +10,8 @@ import Upcoming from '@/components/dashboard/Upcoming';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from '../../firebaseConfig';
+import { collection, deleteDoc, doc, getDocs, orderBy, query } from 'firebase/firestore';
+import { auth, db } from '../../firebaseConfig';
 
 export default function DashboardComponent() {
   const router = useRouter();
@@ -22,13 +23,16 @@ export default function DashboardComponent() {
   // form handlers removed (AddScheduleForm was removed). Keep state for potential future use.
 
   async function removeSchedule(id: number) {
-    const next = schedules.filter((it) => it.id !== id);
-    setSchedules(next);
+    setSchedules((prev) => prev.filter((it) => it.id !== id));
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
     try {
-      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-      await AsyncStorage.setItem('schedules', JSON.stringify(next));
+      const docRef = doc(db, 'users', currentUser.uid, 'schedules', String(id));
+      await deleteDoc(docRef);
     } catch (e) {
-      // ignore
+      console.log('Error deleting schedule from Firestore', e);
     }
   }
 
@@ -51,15 +55,34 @@ export default function DashboardComponent() {
       }
     });
 
-    (async function load() {
+    (async function loadFromFirestore() {
       try {
-        const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-        const raw = await AsyncStorage.getItem('schedules');
-        if (raw && mounted) {
-          setSchedules(JSON.parse(raw));
-        }
+        const currentUser = auth.currentUser;
+        if (!currentUser) return;
+
+        const baseRef = collection(db, 'users', currentUser.uid, 'schedules');
+        const q = query(baseRef, orderBy('createdAt', 'asc'));
+        const snapshot = await getDocs(q);
+        if (!mounted) return;
+
+        const loaded: any[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as any;
+          loaded.push({
+            id: docSnap.id,
+            name: data.name,
+            dosage: data.dosage,
+            potency: data.potency,
+            time: data.time,
+            days: data.days || [],
+            taken: data.taken ?? false,
+            color: data.color || '#3b82f6',
+          });
+        });
+
+        setSchedules(loaded);
       } catch (e) {
-        // ignore
+        console.log('Error loading schedules from Firestore', e);
       }
     })();
     return () => {
