@@ -3,7 +3,13 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import MedicationCard from './MedicationCard';
 
-export default function TodaySchedule({ schedules, onRemove }: { schedules: any[]; onRemove: (id: number) => void }) {
+type TodayScheduleProps = {
+  schedules: any[];
+  onRemove: (id: number) => void;
+  onToggleTake?: (id: string, nextTaken: boolean) => void;
+};
+
+export default function TodaySchedule({ schedules, onRemove, onToggleTake }: TodayScheduleProps) {
   return (
     <View style={styles.container}>
       <ThemedText type="title" style={styles.title}>{"Today's Schedule"}</ThemedText>
@@ -17,6 +23,11 @@ export default function TodaySchedule({ schedules, onRemove }: { schedules: any[
               time={item.time}
               taken={item.taken}
               color={item.color}
+              onToggleTake={
+                onToggleTake && item.id
+                  ? () => onToggleTake(String(item.id), !item.taken)
+                  : undefined
+              }
             />
           </View>
         ))}

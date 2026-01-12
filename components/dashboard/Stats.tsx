@@ -2,13 +2,30 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import StatCard from './StatCard';
 
-export default function Stats() {
+type StatsProps = {
+  todayTaken: number;
+  todayTotal: number;
+  upcomingCount: number;
+  missedCount: number;
+  streakDays: number;
+};
+
+export default function Stats({
+  todayTaken,
+  todayTotal,
+  upcomingCount,
+  missedCount,
+  streakDays,
+}: StatsProps) {
+  const takenLabel = `${todayTaken}/${todayTotal}`;
+  const streakLabel = `${streakDays} day${streakDays === 1 ? '' : 's'}`;
+
   return (
     <View style={styles.row}>
-      <StatCard label="Taken Today" value="2/6" color="#16a34a" bgColor="#ecfdf5" />
-      <StatCard label="Upcoming" value={4} color="#0ea5e9" bgColor="#eff6ff" />
-      <StatCard label="Streak" value="7 days" color="#7c3aed" bgColor="#f5f3ff" />
-      <StatCard label="Missed" value={0} color="#ea580c" bgColor="#fff7ed" />
+      <StatCard label="Taken Today" value={takenLabel} color="#16a34a" bgColor="#ecfdf5" />
+      <StatCard label="Upcoming" value={upcomingCount} color="#0ea5e9" bgColor="#eff6ff" />
+      <StatCard label="Streak" value={streakLabel} color="#7c3aed" bgColor="#f5f3ff" />
+      <StatCard label="Missed" value={missedCount} color="#ea580c" bgColor="#fff7ed" />
     </View>
   );
 }

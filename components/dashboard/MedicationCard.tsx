@@ -2,7 +2,17 @@ import { ThemedText } from '@/components/themed-text';
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
-export default function MedicationCard({ name, dosage, potency, time, taken, color = '#6b5bff' }: { name: string; dosage?: string; potency?: string; time: string; taken?: boolean; color?: string }) {
+type MedicationCardProps = {
+  name: string;
+  dosage?: string;
+  potency?: string;
+  time: string;
+  taken?: boolean;
+  color?: string;
+  onToggleTake?: () => void;
+};
+
+export default function MedicationCard({ name, dosage, potency, time, taken, color = '#6b5bff', onToggleTake }: MedicationCardProps) {
   const details = [dosage, potency].filter(Boolean).join(' · ');
   return (
     <View style={styles.card}>
@@ -17,7 +27,11 @@ export default function MedicationCard({ name, dosage, potency, time, taken, col
 
       <View style={styles.right}>
         <ThemedText style={styles.time}>{time}</ThemedText>
-        <TouchableOpacity style={[styles.takeBtn, taken && styles.taken]}>
+        <TouchableOpacity
+          style={[styles.takeBtn, taken && styles.taken]}
+          activeOpacity={0.8}
+          onPress={onToggleTake}
+        >
           <ThemedText style={[styles.takeText, taken && { color: '#fff' }]}>{taken ? 'Taken' : 'Take'}</ThemedText>
         </TouchableOpacity>
       </View>

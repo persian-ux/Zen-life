@@ -3,14 +3,29 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import MedicationCard from './MedicationCard';
 
-export default function Upcoming({ items }: { items: any[] }) {
+type UpcomingProps = {
+  items: any[];
+  onToggleTake?: (id: string, nextTaken: boolean) => void;
+};
+
+export default function Upcoming({ items, onToggleTake }: UpcomingProps) {
   return (
     <View style={styles.container}>
       <ThemedText type="title" style={styles.title}>Coming Up</ThemedText>
       <View style={{ width: '100%', marginTop: 8 }}>
         {items.map((it) => (
           <View key={it.id} style={{ marginBottom: 10 }}>
-            <MedicationCard name={it.name} dosage={it.dosage} time={it.time} taken={it.taken} color={it.color} />
+            <MedicationCard
+              name={it.name}
+              dosage={it.dosage}
+              potency={it.potency}
+              time={it.time}
+              taken={it.taken}
+              color={it.color}
+              onToggleTake={
+                onToggleTake && it.id ? () => onToggleTake(String(it.id), !it.taken) : undefined
+              }
+            />
           </View>
         ))}
       </View>

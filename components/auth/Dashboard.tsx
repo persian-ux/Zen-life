@@ -10,7 +10,7 @@ import Upcoming from '@/components/dashboard/Upcoming';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, deleteDoc, doc, getDocs, orderBy, query } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 
 export default function DashboardComponent() {
@@ -49,47 +49,73 @@ export default function DashboardComponent() {
   React.useEffect(() => {
     let mounted = true;
 
+    let unsubscribeSchedules: (() => void) | undefined;
+
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      if (mounted) {
-        setUser(currentUser);
+      if (!mounted) return;
+
+      setUser(currentUser);
+
+      if (unsubscribeSchedules) {
+        unsubscribeSchedules();
+        unsubscribeSchedules = undefined;
       }
-    });
 
-    (async function loadFromFirestore() {
-      try {
-        const currentUser = auth.currentUser;
-        if (!currentUser) return;
+      if (!currentUser) {
+        setSchedules([]);
+        return;
+      }
 
-        const baseRef = collection(db, 'users', currentUser.uid, 'schedules');
-        const q = query(baseRef, orderBy('createdAt', 'asc'));
-        const snapshot = await getDocs(q);
-        if (!mounted) return;
+      const baseRef = collection(db, 'users', currentUser.uid, 'schedules');
+      const q = query(baseRef, orderBy('createdAt', 'asc'));
 
-        const loaded: any[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as any;
-          loaded.push({
-            id: docSnap.id,
-            name: data.name,
-            dosage: data.dosage,
-            potency: data.potency,
-            time: data.time,
-            days: data.days || [],
-            taken: data.taken ?? false,
-            color: data.color || '#3b82f6',
+      unsubscribeSchedules = onSnapshot(
+        q,
+        (snapshot) => {
+          if (!mounted) return;
+
+          const loaded: any[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as any;
+            loaded.push({
+              id: docSnap.id,
+              name: data.name,
+              dosage: data.dosage,
+              potency: data.potency,
+              time: data.time,
+              days: data.days || [],
+              taken: data.taken ?? false,
+              color: data.color || '#3b82f6',
+            });
           });
-        });
 
-        setSchedules(loaded);
-      } catch (e) {
-        console.log('Error loading schedules from Firestore', e);
-      }
-    })();
+          setSchedules(loaded);
+        },
+        (error) => {
+          console.log('Error listening to schedules from Firestore', error);
+        },
+      );
+    });
     return () => {
       mounted = false;
       unsubscribeAuth();
+      if (unsubscribeSchedules) unsubscribeSchedules();
     };
   }, []);
+
+  async function toggleTaken(id: string, nextTaken: boolean) {
+    setSchedules((prev) => prev.map((item) => (item.id === id ? { ...item, taken: nextTaken } : item)));
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    try {
+      const docRef = doc(db, 'users', currentUser.uid, 'schedules', id);
+      await updateDoc(docRef, { taken: nextTaken });
+    } catch (e) {
+      console.log('Error updating taken status in Firestore', e);
+    }
+  }
 
   // compute todays schedules (simple): items that include current day
   const now = new Date();
@@ -99,6 +125,52 @@ export default function DashboardComponent() {
 
   const todays = schedules.filter((s) => s.days.includes(todayAbbrev));
   const upcoming = schedules.slice(0, 3);
+
+  // derive live stats for the header cards
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  function parseTimeToMinutes(timeStr: string | undefined): number | null {
+    if (!timeStr) return null;
+    const trimmed = timeStr.trim();
+    if (!trimmed) return null;
+
+    // Expect formats like "08:00 AM" or "6:30 pm"
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+    if (!match) return null;
+
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const period = match[3].toUpperCase();
+
+    if (period === 'PM' && hours !== 12) {
+      hours += 12;
+    } else if (period === 'AM' && hours === 12) {
+      hours = 0;
+    }
+
+    return hours * 60 + minutes;
+  }
+
+  let todayTotal = todays.length;
+  let todayTaken = 0;
+  let upcomingCount = 0;
+  let missedCount = 0;
+
+  todays.forEach((item) => {
+    if (item.taken) {
+      todayTaken += 1;
+      return;
+    }
+
+    const minutes = parseTimeToMinutes(item.time);
+    if (minutes === null || minutes >= nowMinutes) {
+      upcomingCount += 1;
+    } else {
+      missedCount += 1;
+    }
+  });
+
+  const streakDays = todayTotal > 0 && todayTaken === todayTotal ? 1 : 0;
 
   // sample fallback data to showcase design when there are no user schedules yet
   const sampleToday = [
@@ -152,12 +224,25 @@ export default function DashboardComponent() {
         </View>
 
         <View style={{ maxWidth: 980, width: '100%', alignItems: 'center' }}>
-          <Stats />
+          <Stats
+            todayTaken={todayTaken}
+            todayTotal={todayTotal}
+            upcomingCount={upcomingCount}
+            missedCount={missedCount}
+            streakDays={streakDays}
+          />
 
           <View style={styles.card}>
-            <TodaySchedule schedules={todaysToShow} onRemove={removeSchedule} />
+            <TodaySchedule
+              schedules={todaysToShow}
+              onRemove={removeSchedule}
+              onToggleTake={schedules.length ? toggleTaken : undefined}
+            />
 
-            <Upcoming items={upcomingToShow} />
+            <Upcoming
+              items={upcomingToShow}
+              onToggleTake={schedules.length ? toggleTaken : undefined}
+            />
 
             <Features />
           </View>
