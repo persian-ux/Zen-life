@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    StyleSheet,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { getPasswordChecklist } from './passwordStrength';
 
 import { useRouter } from 'expo-router';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '../../firebaseConfig';
 import { ThemedText } from '../themed-text';
 import { ThemedView } from '../themed-view';
 
@@ -25,7 +27,7 @@ export default function SignUp() {
 
   const passwordChecklist = React.useMemo(() => getPasswordChecklist(password), [password]);
 
-  function validateAndSubmit() {
+  async function validateAndSubmit() {
     setError('');
     if (!username.trim() || !email.trim() || !password) {
       setError('Please fill all fields.');
@@ -39,12 +41,38 @@ export default function SignUp() {
       return;
     }
 
-  // Hook into your auth flow here. Do not log sensitive information to the console in production.
-    setError('');
-    // clear form (optional)
-    setUsername('');
-    setEmail('');
-    setPassword('');
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const user = userCredential.user;
+
+      const trimmedUsername = username.trim();
+      if (trimmedUsername) {
+        try {
+          await updateProfile(user, { displayName: trimmedUsername });
+        } catch (profileError) {
+          console.log('Failed to update profile displayName', profileError);
+        }
+      }
+
+      // clear form (optional)
+      setUsername('');
+      setEmail('');
+      setPassword('');
+
+      // navigate to dashboard after successful signup
+      router.replace('/dashboard');
+    } catch (err: any) {
+      console.log('Sign up error', err);
+      let message = 'Failed to create account.';
+      if (err.code === 'auth/email-already-in-use') {
+        message = 'This email is already in use.';
+      } else if (err.code === 'auth/invalid-email') {
+        message = 'Please enter a valid email address.';
+      } else if (err.code === 'auth/weak-password') {
+        message = 'Password is too weak.';
+      }
+      setError(message);
+    }
   }
 
   return (

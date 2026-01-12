@@ -9,6 +9,8 @@ import TodaySchedule from '@/components/dashboard/TodaySchedule';
 import Upcoming from '@/components/dashboard/Upcoming';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { signOut } from 'firebase/auth';
+import { auth } from '../../firebaseConfig';
 
 export default function DashboardComponent() {
   const router = useRouter();
@@ -28,9 +30,14 @@ export default function DashboardComponent() {
     }
   }
 
-  function handleSignOut() {
-    // Clear auth state here and navigate back to login
-    router.replace('/login');
+  async function handleSignOut() {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.log('Sign out error', err);
+    } finally {
+      router.replace('/login');
+    }
   }
 
   React.useEffect(() => {
