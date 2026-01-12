@@ -37,7 +37,10 @@ export default function AddMedicationScreen() {
   return (
     <ThemedView style={styles.screen}>
       <View style={{ alignItems: 'center', padding: 20 }}>
-        <AddMedication onSave={handleSave} open={true} />
+        <AddMedication
+          onSave={handleSave}
+          onCancel={() => router.replace('/dashboard')}
+        />
       </View>
     </ThemedView>
   );
