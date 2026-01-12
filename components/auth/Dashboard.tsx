@@ -1,0 +1,346 @@
+import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+
+import Features from '@/components/dashboard/Features';
+import Hero from '@/components/dashboard/Hero';
+import Stats from '@/components/dashboard/Stats';
+import TodaySchedule from '@/components/dashboard/TodaySchedule';
+import Upcoming from '@/components/dashboard/Upcoming';
+import { ThemedText } from '@/components/themed-text';
+import { ThemedView } from '@/components/themed-view';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../../firebaseConfig';
+
+export default function DashboardComponent() {
+  const router = useRouter();
+  // Local schedule state — in a real app persist in secure storage or backend
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [user, setUser] = useState<any | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // form handlers removed (AddScheduleForm was removed). Keep state for potential future use.
+
+  async function removeSchedule(id: number) {
+    setSchedules((prev) => prev.filter((it) => it.id !== id));
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    try {
+      const docRef = doc(db, 'users', currentUser.uid, 'schedules', String(id));
+      await deleteDoc(docRef);
+    } catch (e) {
+      console.log('Error deleting schedule from Firestore', e);
+    }
+  }
+
+  async function handleSignOut() {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.log('Sign out error', err);
+    } finally {
+      router.replace('/login');
+    }
+  }
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    let unsubscribeSchedules: (() => void) | undefined;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (!mounted) return;
+
+      setUser(currentUser);
+
+      if (unsubscribeSchedules) {
+        unsubscribeSchedules();
+        unsubscribeSchedules = undefined;
+      }
+
+      if (!currentUser) {
+        setSchedules([]);
+        return;
+      }
+
+      const baseRef = collection(db, 'users', currentUser.uid, 'schedules');
+      const q = query(baseRef, orderBy('createdAt', 'asc'));
+
+      unsubscribeSchedules = onSnapshot(
+        q,
+        (snapshot) => {
+          if (!mounted) return;
+
+          const loaded: any[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as any;
+            loaded.push({
+              id: docSnap.id,
+              name: data.name,
+              dosage: data.dosage,
+              potency: data.potency,
+              time: data.time,
+              days: data.days || [],
+              taken: data.taken ?? false,
+              color: data.color || '#3b82f6',
+            });
+          });
+
+          setSchedules(loaded);
+        },
+        (error) => {
+          console.log('Error listening to schedules from Firestore', error);
+        },
+      );
+    });
+    return () => {
+      mounted = false;
+      unsubscribeAuth();
+      if (unsubscribeSchedules) unsubscribeSchedules();
+    };
+  }, []);
+
+  async function toggleTaken(id: string, nextTaken: boolean) {
+    setSchedules((prev) => prev.map((item) => (item.id === id ? { ...item, taken: nextTaken } : item)));
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    try {
+      const docRef = doc(db, 'users', currentUser.uid, 'schedules', id);
+      await updateDoc(docRef, { taken: nextTaken });
+    } catch (e) {
+      console.log('Error updating taken status in Firestore', e);
+    }
+  }
+
+  // compute todays schedules (simple): items that include current day
+  const now = new Date();
+  const dayIndex = now.getDay(); // 0 Sun .. 6 Sat
+  const dayMap = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const todayAbbrev = dayMap[dayIndex];
+
+  const todays = schedules.filter((s) => s.days.includes(todayAbbrev));
+  const upcoming = schedules.slice(0, 3);
+
+  // derive live stats for the header cards
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  function parseTimeToMinutes(timeStr: string | undefined): number | null {
+    if (!timeStr) return null;
+    const trimmed = timeStr.trim();
+    if (!trimmed) return null;
+
+    // Expect formats like "08:00 AM" or "6:30 pm"
+    const match = trimmed.match(/^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$/);
+    if (!match) return null;
+
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const period = match[3].toUpperCase();
+
+    if (period === 'PM' && hours !== 12) {
+      hours += 12;
+    } else if (period === 'AM' && hours === 12) {
+      hours = 0;
+    }
+
+    return hours * 60 + minutes;
+  }
+
+  let todayTotal = todays.length;
+  let todayTaken = 0;
+  let upcomingCount = 0;
+  let missedCount = 0;
+
+  todays.forEach((item) => {
+    if (item.taken) {
+      todayTaken += 1;
+      return;
+    }
+
+    const minutes = parseTimeToMinutes(item.time);
+    if (minutes === null || minutes >= nowMinutes) {
+      upcomingCount += 1;
+    } else {
+      missedCount += 1;
+    }
+  });
+
+  const streakDays = todayTotal > 0 && todayTaken === todayTotal ? 1 : 0;
+
+  // sample fallback data to showcase design when there are no user schedules yet
+  const sampleToday = [
+    { id: 's1', name: 'Aspirin', dosage: '100mg', time: '8:00 AM', taken: true, color: '#3b82f6' },
+    { id: 's2', name: 'Vitamin D', dosage: '2000 IU', time: '9:00 AM', taken: true, color: '#f59e0b' },
+    { id: 's3', name: 'Metformin', dosage: '500mg', time: '12:00 PM', taken: false, color: '#8b5cf6' },
+    { id: 's4', name: 'Lisinopril', dosage: '10mg', time: '6:00 PM', taken: false, color: '#10b981' },
+  ];
+
+  const sampleUpcoming = [
+    { id: 'u1', name: 'Omega-3', dosage: '1000mg', time: '8:00 PM', taken: false, color: '#fb923c' },
+    { id: 'u2', name: 'Melatonin', dosage: '5mg', time: '10:00 PM', taken: false, color: '#6366f1' },
+  ];
+
+  const todaysToShow = schedules.length ? todays : sampleToday;
+  const upcomingToShow = schedules.length ? upcoming : sampleUpcoming;
+
+  const displayName = user?.displayName || (user?.email ? user.email.split('@')[0] : 'User');
+
+  return (
+    <ThemedView style={styles.screen}>
+      <ScrollView contentContainerStyle={{ alignItems: 'center', padding: 24 }}>
+        <View style={styles.topBar}>
+          {user && (
+            <View style={styles.userMenuWrap}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setMenuOpen((open) => !open)}
+                style={styles.userNameButton}
+              >
+                <ThemedText style={styles.userName}>{displayName}</ThemedText>
+              </TouchableOpacity>
+              {menuOpen && (
+                <View style={styles.menuDropdown}>
+                  <TouchableOpacity onPress={handleSignOut} activeOpacity={0.85}>
+                    <ThemedText style={styles.menuItem}>Sign out</ThemedText>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
+        <Hero onAdd={() => router.push('/add-medication')} />
+
+        {/* Banner image inserted between Hero and Stats (Pills photo) */}
+        <View style={{ width: '100%', alignItems: 'center', marginTop: 18, marginBottom: 8 }}>
+          <View style={styles.imageWrap}>
+            <Image source={require('../../assets/images/Pills.jpg')} style={styles.bannerImage} resizeMode="cover" />
+          </View>
+        </View>
+
+        <View style={{ maxWidth: 980, width: '100%', alignItems: 'center' }}>
+          <Stats
+            todayTaken={todayTaken}
+            todayTotal={todayTotal}
+            upcomingCount={upcomingCount}
+            missedCount={missedCount}
+            streakDays={streakDays}
+          />
+
+          <View style={styles.card}>
+            <TodaySchedule
+              schedules={todaysToShow}
+              onRemove={removeSchedule}
+              onToggleTake={schedules.length ? toggleTaken : undefined}
+            />
+
+            <Upcoming
+              items={upcomingToShow}
+              onToggleTake={schedules.length ? toggleTaken : undefined}
+            />
+
+            <Features />
+          </View>
+        </View>
+      </ScrollView>
+    </ThemedView>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  topBar: {
+    width: '100%',
+    maxWidth: 980,
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  userMenuWrap: {
+    alignItems: 'flex-end',
+  },
+  userNameButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(10,126,164,0.06)',
+  },
+  userName: {
+    fontWeight: '600',
+    color: '#0a4b57',
+  },
+  menuDropdown: {
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  menuItem: {
+    color: '#d33',
+    fontWeight: '600',
+  },
+  card: {
+    width: '100%',
+    maxWidth: 720,
+    backgroundColor: 'linear-gradient(180deg, #fff, #f7fcff)',
+    borderRadius: 20,
+    padding: 22,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 8,
+    alignItems: 'center',
+  },
+  title: { marginBottom: 6, color: '#0a6fb0', textAlign: 'center', fontSize: 20, fontWeight: '700' },
+  subtitle: { marginBottom: 18, color: '#4b6b7a', textAlign: 'center' },
+  formRow: { flexDirection: 'row', width: '100%', marginBottom: 12, alignItems: 'center' },
+  input: {
+    height: 44,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(10,126,164,0.06)',
+    color: '#173943',
+  },
+  daysRow: { flexDirection: 'row', flexWrap: 'wrap', width: '100%', marginBottom: 12 },
+  dayChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(10,126,164,0.12)',
+    marginRight: 8,
+    marginBottom: 8,
+    backgroundColor: '#fff',
+  },
+  dayChipActive: { backgroundColor: '#0a7ea4', borderColor: '#0a7ea4' },
+  dayText: { color: '#0a3b40', fontWeight: '600' },
+  addBtn: { marginTop: 6, backgroundColor: '#0a7ea4', paddingVertical: 12, paddingHorizontal: 18, borderRadius: 12, alignItems: 'center' },
+  addBtnText: { color: '#fff', fontWeight: '700' },
+  emptyState: { padding: 18, alignItems: 'center' },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#2b5963' },
+  emptySub: { color: '#6b7b83', marginTop: 6, textAlign: 'center' },
+  scheduleCard: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 12, backgroundColor: '#fff', marginBottom: 12, borderWidth: 1, borderColor: 'rgba(10,126,164,0.06)' },
+  medName: { fontSize: 16, fontWeight: '700', color: '#0a4b57' },
+  medTime: { color: '#177a4c', marginTop: 4, marginBottom: 6 },
+  scheduleDaysRow: { flexDirection: 'row', flexWrap: 'wrap' },
+  scheduleDay: { paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6, marginRight: 6, marginBottom: 6 },
+  scheduleDayActive: { backgroundColor: '#0a7ea4' },
+  scheduleDayInactive: { backgroundColor: 'rgba(10,126,164,0.06)' },
+  scheduleDayTextActive: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  scheduleDayTextInactive: { color: '#0a4b57', fontSize: 12, fontWeight: '600' },
+  removeBtn: { paddingHorizontal: 8, paddingVertical: 6 },
+  removeText: { color: '#d33', fontWeight: '700' },
+  imageWrap: { width: '100%', maxWidth: 720, borderRadius: 16, overflow: 'hidden', backgroundColor: '#fff', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 12 },
+  bannerImage: { width: '100%', height: 160 },
+});

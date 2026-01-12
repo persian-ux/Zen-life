@@ -8,7 +8,11 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { getPasswordChecklist } from './passwordStrength';
 
+import { useRouter } from 'expo-router';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { auth } from '../../firebaseConfig';
 import { ThemedText } from '../themed-text';
 import { ThemedView } from '../themed-view';
 
@@ -18,8 +22,12 @@ export default function SignUp() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [passwordFocused, setPasswordFocused] = useState(false);
+  const router = useRouter();
 
-  function validateAndSubmit() {
+  const passwordChecklist = React.useMemo(() => getPasswordChecklist(password), [password]);
+
+  async function validateAndSubmit() {
     setError('');
     if (!username.trim() || !email.trim() || !password) {
       setError('Please fill all fields.');
@@ -33,14 +41,38 @@ export default function SignUp() {
       return;
     }
 
-    // For now just log the values — hook into your auth flow here.
-     
-    console.log('SignUp', { username, email, password });
-    setError('');
-    // clear form (optional)
-    setUsername('');
-    setEmail('');
-    setPassword('');
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      const user = userCredential.user;
+
+      const trimmedUsername = username.trim();
+      if (trimmedUsername) {
+        try {
+          await updateProfile(user, { displayName: trimmedUsername });
+        } catch (profileError) {
+          console.log('Failed to update profile displayName', profileError);
+        }
+      }
+
+      // clear form (optional)
+      setUsername('');
+      setEmail('');
+      setPassword('');
+
+      // navigate to dashboard after successful signup
+      router.replace('/dashboard');
+    } catch (err: any) {
+      console.log('Sign up error', err);
+      let message = 'Failed to create account.';
+      if (err.code === 'auth/email-already-in-use') {
+        message = 'This email is already in use.';
+      } else if (err.code === 'auth/invalid-email') {
+        message = 'Please enter a valid email address.';
+      } else if (err.code === 'auth/weak-password') {
+        message = 'Password is too weak.';
+      }
+      setError(message);
+    }
   }
 
   return (
@@ -95,12 +127,32 @@ export default function SignUp() {
                 placeholderTextColor="#9aa4ad"
                 style={[styles.input, { flex: 1, marginRight: 8 }]}
                 secureTextEntry={!showPassword}
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
                 returnKeyType="done"
               />
               <Pressable onPress={() => setShowPassword((s) => !s)} style={styles.showBtn}>
                 <ThemedText type="link">{showPassword ? 'Hide' : 'Show'}</ThemedText>
               </Pressable>
             </View>
+            {/* Password strength indicator (2nd method): colored horizontal bar + label */}
+            {/* strength bar removed - checklist below shows requirements */}
+
+            {(passwordFocused || password) && (
+              <View style={styles.checklistBox}>
+                <ThemedText style={styles.checklistTitle}>Password must include:</ThemedText>
+                {passwordChecklist.map((item: any) => (
+                  <View key={item.key} style={styles.reqRow}>
+                    <ThemedText style={[styles.reqIcon, { color: item.passed ? '#0abf6b' : '#d33' }]}>
+                      {item.passed ? '✓' : '✕'}
+                    </ThemedText>
+                    <ThemedText style={[styles.reqText, { color: item.passed ? '#177a4c' : '#d33' }]}>
+                      {item.label}
+                    </ThemedText>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
           {error ? <ThemedText style={styles.error}>{error}</ThemedText> : null}
@@ -110,7 +162,7 @@ export default function SignUp() {
           </TouchableOpacity>
 
           <ThemedText style={styles.footer}>
-            Already have an account? <ThemedText type="link">Log in</ThemedText>
+            Already have an account? <ThemedText type="link" onPress={() => router.push('/login')}>Log in</ThemedText>
           </ThemedText>
         </View>
       </KeyboardAvoidingView>
@@ -196,6 +248,57 @@ const styles = StyleSheet.create({
     color: '#d33',
     marginTop: 6,
     marginBottom: 4,
+  },
+  strengthContainer: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  strengthBar: {
+    flex: 1,
+    height: 8,
+    backgroundColor: 'rgba(10,126,164,0.12)',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginRight: 10,
+  },
+  strengthFill: {
+    height: '100%',
+    borderRadius: 8,
+  },
+  // strengthLabel removed along with the visual bar
+  checklistBox: {
+    marginTop: 10,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 6,
+    borderColor: 'rgba(0,0,0,0.06)',
+    borderWidth: 1,
+  },
+  checklistTitle: {
+    fontSize: 13,
+    marginBottom: 8,
+    color: '#37474f',
+    fontWeight: '600',
+  },
+  reqRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  reqIcon: {
+    width: 22,
+    textAlign: 'center',
+    marginRight: 8,
+    fontSize: 14,
+  },
+  reqText: {
+    fontSize: 13,
   },
   blob: {
     position: 'absolute',
