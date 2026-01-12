@@ -9,13 +9,15 @@ import TodaySchedule from '@/components/dashboard/TodaySchedule';
 import Upcoming from '@/components/dashboard/Upcoming';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from '../../firebaseConfig';
 
 export default function DashboardComponent() {
   const router = useRouter();
   // Local schedule state — in a real app persist in secure storage or backend
   const [schedules, setSchedules] = useState<any[]>([]);
+  const [user, setUser] = useState<any | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // form handlers removed (AddScheduleForm was removed). Keep state for potential future use.
 
@@ -42,6 +44,13 @@ export default function DashboardComponent() {
 
   React.useEffect(() => {
     let mounted = true;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      if (mounted) {
+        setUser(currentUser);
+      }
+    });
+
     (async function load() {
       try {
         const AsyncStorage = require('@react-native-async-storage/async-storage').default;
@@ -55,6 +64,7 @@ export default function DashboardComponent() {
     })();
     return () => {
       mounted = false;
+      unsubscribeAuth();
     };
   }, []);
 
@@ -83,9 +93,32 @@ export default function DashboardComponent() {
   const todaysToShow = schedules.length ? todays : sampleToday;
   const upcomingToShow = schedules.length ? upcoming : sampleUpcoming;
 
+  const displayName = user?.displayName || (user?.email ? user.email.split('@')[0] : 'User');
+
   return (
     <ThemedView style={styles.screen}>
       <ScrollView contentContainerStyle={{ alignItems: 'center', padding: 24 }}>
+        <View style={styles.topBar}>
+          {user && (
+            <View style={styles.userMenuWrap}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => setMenuOpen((open) => !open)}
+                style={styles.userNameButton}
+              >
+                <ThemedText style={styles.userName}>{displayName}</ThemedText>
+              </TouchableOpacity>
+              {menuOpen && (
+                <View style={styles.menuDropdown}>
+                  <TouchableOpacity onPress={handleSignOut} activeOpacity={0.85}>
+                    <ThemedText style={styles.menuItem}>Sign out</ThemedText>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
         <Hero onAdd={() => router.push('/add-medication')} />
 
         {/* Banner image inserted between Hero and Stats (Pills photo) */}
@@ -104,10 +137,6 @@ export default function DashboardComponent() {
             <Upcoming items={upcomingToShow} />
 
             <Features />
-
-            <TouchableOpacity style={styles.signout} onPress={handleSignOut} activeOpacity={0.85}>
-              <ThemedText style={styles.signoutText}>Sign out</ThemedText>
-            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -117,6 +146,41 @@ export default function DashboardComponent() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  topBar: {
+    width: '100%',
+    maxWidth: 980,
+    alignItems: 'flex-end',
+    marginBottom: 8,
+  },
+  userMenuWrap: {
+    alignItems: 'flex-end',
+  },
+  userNameButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(10,126,164,0.06)',
+  },
+  userName: {
+    fontWeight: '600',
+    color: '#0a4b57',
+  },
+  menuDropdown: {
+    marginTop: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  menuItem: {
+    color: '#d33',
+    fontWeight: '600',
+  },
   card: {
     width: '100%',
     maxWidth: 720,
@@ -169,8 +233,6 @@ const styles = StyleSheet.create({
   scheduleDayTextInactive: { color: '#0a4b57', fontSize: 12, fontWeight: '600' },
   removeBtn: { paddingHorizontal: 8, paddingVertical: 6 },
   removeText: { color: '#d33', fontWeight: '700' },
-  signout: { marginTop: 12, paddingVertical: 10 },
-  signoutText: { color: '#0a7ea4', fontWeight: '700' },
   imageWrap: { width: '100%', maxWidth: 720, borderRadius: 16, overflow: 'hidden', backgroundColor: '#fff', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.06, shadowRadius: 12 },
   bannerImage: { width: '100%', height: 160 },
 });
